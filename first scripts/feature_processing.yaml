@@ -1,0 +1,59 @@
+name: Feature processing
+description: calculate features for our machine learning model
+inputs:
+- {name: raw_data_path, type: String}
+- {name: feature_data_path, type: String}
+outputs:
+- {name: Output, type: String}
+implementation:
+  container:
+    image: python:3.7
+    command:
+    - sh
+    - -c
+    - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+      'fastparquet' 'fsspec' 'gcsfs' 'google-cloud-storage' || PIP_DISABLE_PIP_VERSION_CHECK=1
+      python3 -m pip install --quiet --no-warn-script-location 'fastparquet' 'fsspec'
+      'gcsfs' 'google-cloud-storage' --user) && "$0" "$@"
+    - python3
+    - -u
+    - -c
+    - "def feature_processing(raw_data_path, feature_data_path):\n    '''calculate\
+      \ features for our machine learning model'''\n    import pandas as pd\n    from\
+      \ datetime import datetime\n\n    # read dataframe\n    weather_df = pd.read_parquet(raw_data_path)\n\
+      \n    # create empty df to store feature\n    weather_features_df = weather_df\n\
+      \n    #create variables for years, months and days\n    weather_features_df['YYYY']\
+      \ = weather_features_df['YYYYMMDD,'].str.slice(0,4) #create a variable for years\n\
+      \    weather_features_df['MM'] = weather_features_df['YYYYMMDD,'].str.slice(4,6)#create\
+      \ a variable for months\n    weather_features_df['DD'] = weather_features_df['YYYYMMDD,'].str.slice(6,8)\n\
+      \    for i in weather_features_df.columns:\n            weather_features_df[i]\
+      \ = weather_features_df[i].astype(float, errors= 'ignore') \n    weather_features_df\
+      \ = weather_features_df.drop('YYYYMMDD,', axis=1)\n\n    weather_features_df['TG_future']\
+      \ = weather_features_df['TG,'].shift(periods = -1)\n\n    #remove irrelevant\
+      \ features manually\n    weather_features_df = weather_features_df.drop(columns\
+      \ = ['STN,','EV24', 'NG,', 'TN,', 'TNH,', 'TX,', 'TXH,', 'T10N,', 'T10NH,'])\n\
+      \    weather_features_df = weather_features_df.dropna()\n\n    weather_features_df.to_parquet(feature_data_path,\
+      \ compression='GZIP')\n    features_numbers = len(weather_features_df.columns)\
+      \ - 1\n    print('Writing %s features' % (features_numbers))\n    print('Done!')\n\
+      \n    return feature_data_path\n\ndef _serialize_str(str_value: str) -> str:\n\
+      \    if not isinstance(str_value, str):\n        raise TypeError('Value \"{}\"\
+      \ has type \"{}\" instead of str.'.format(str(str_value), str(type(str_value))))\n\
+      \    return str_value\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Feature\
+      \ processing', description='calculate features for our machine learning model')\n\
+      _parser.add_argument(\"--raw-data-path\", dest=\"raw_data_path\", type=str,\
+      \ required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--feature-data-path\"\
+      , dest=\"feature_data_path\", type=str, required=True, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"----output-paths\", dest=\"_output_paths\", type=str,\
+      \ nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"\
+      _output_paths\", [])\n\n_outputs = feature_processing(**_parsed_args)\n\n_outputs\
+      \ = [_outputs]\n\n_output_serializers = [\n    _serialize_str,\n\n]\n\nimport\
+      \ os\nfor idx, output_file in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n\
+      \    except OSError:\n        pass\n    with open(output_file, 'w') as f:\n\
+      \        f.write(_output_serializers[idx](_outputs[idx]))\n"
+    args:
+    - --raw-data-path
+    - {inputValue: raw_data_path}
+    - --feature-data-path
+    - {inputValue: feature_data_path}
+    - '----output-paths'
+    - {outputPath: Output}

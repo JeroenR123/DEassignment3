@@ -1,0 +1,95 @@
+name: Download raw data
+description: load data from local storage
+inputs:
+- {name: raw_data_path, type: String}
+outputs:
+- {name: Output, type: String}
+implementation:
+  container:
+    image: python:3.7
+    command:
+    - sh
+    - -c
+    - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+      'fastparquet' 'fsspec' 'gcsfs' 'google-cloud-storage' || PIP_DISABLE_PIP_VERSION_CHECK=1
+      python3 -m pip install --quiet --no-warn-script-location 'fastparquet' 'fsspec'
+      'gcsfs' 'google-cloud-storage' --user) && "$0" "$@"
+    - python3
+    - -u
+    - -c
+    - |
+      def download_raw_data(raw_data_path):
+          '''load data from local storage'''
+          import pandas as pd
+          import numpy as np
+          from google.cloud import storage
+          import re
+
+          """Downloads a blob from the bucket."""
+          bucket_name = "bucket_de"
+          source_blob_name = "raw/raw_data2.csv"
+          destination_file_name = "tmp/raw_data2.csv"
+
+          storage_client = storage.Client()
+
+          bucket = storage_client.bucket(bucket_name)
+          blob = bucket.blob(source_blob_name)
+          blob.download_to_filename(destination_file_name)
+          print('Downloaded data...')
+
+          #import wget
+          #wget -O bestand --post-data="variabele=waarde&variabele=waarde&...." http://projects.knmi.nl/klimatologie/daggegevens/getdata_dag.cgi
+          #df = pd.read_csv('gs://bucket_de/raw/raw_data2,csv', error_bad_lines = False)
+          df =  pd.read_csv("tmp/raw_data2.csv", error_bad_lines=False)
+
+          def dfreplace(df, *args, **kwargs):
+              s = pd.Series(df.values.flatten())
+              s = s.str.replace(*args, **kwargs)
+              return pd.DataFrame(s.values.reshape(df.shape), df.index, df.columns)
+
+          weather_df = dfreplace(df, ',', '')
+
+          for i in weather_df.columns:
+              weather_df[i] = weather_df[i].astype(str)
+              weather_df[i][weather_df[i].apply(lambda i: True if re.search('^\s*$', str(i)) else False)]=np.NaN
+
+          print(weather_df.head())
+          print('trying to write to GS')
+          weather_df.to_parquet(raw_data_path, compression='GZIP')
+          print('Done!')
+          return raw_data_path
+
+      def _serialize_str(str_value: str) -> str:
+          if not isinstance(str_value, str):
+              raise TypeError('Value "{}" has type "{}" instead of str.'.format(str(str_value), str(type(str_value))))
+          return str_value
+
+      import argparse
+      _parser = argparse.ArgumentParser(prog='Download raw data', description='load data from local storage')
+      _parser.add_argument("--raw-data-path", dest="raw_data_path", type=str, required=True, default=argparse.SUPPRESS)
+      _parser.add_argument("----output-paths", dest="_output_paths", type=str, nargs=1)
+      _parsed_args = vars(_parser.parse_args())
+      _output_files = _parsed_args.pop("_output_paths", [])
+
+      _outputs = download_raw_data(**_parsed_args)
+
+      _outputs = [_outputs]
+
+      _output_serializers = [
+          _serialize_str,
+
+      ]
+
+      import os
+      for idx, output_file in enumerate(_output_files):
+          try:
+              os.makedirs(os.path.dirname(output_file))
+          except OSError:
+              pass
+          with open(output_file, 'w') as f:
+              f.write(_output_serializers[idx](_outputs[idx]))
+    args:
+    - --raw-data-path
+    - {inputValue: raw_data_path}
+    - '----output-paths'
+    - {outputPath: Output}
