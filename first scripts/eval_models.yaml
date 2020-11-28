@@ -39,7 +39,7 @@ implementation:
       \        blob = bucket.get_blob(model_path)\n        if blob is None:\n    \
       \        raise AttributeError('No files to download') \n        model_bytestream\
       \ = BytesIO(blob.download_as_string())\n        model = cPickle.load(model_bytestream)\n\
-      \        predictions = model.predict(x_val)\n        return mean_absolute_error(y_val,\
+      \        predictions = model.predict(x_val)\n\n        return mean_absolute_error(y_val,\
       \ predictions)\n\n    Models = namedtuple('Model', 'type score path')\n    m_list\
       \ = list()\n\n    regression_mae = get_mae(regression_weather_model_path)\n\
       \    m_list.append(Models('regression', regression_mae, regression_weather_model_path))\n\

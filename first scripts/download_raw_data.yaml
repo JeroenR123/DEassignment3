@@ -25,35 +25,58 @@ implementation:
           from google.cloud import storage
           import re
 
-          """Downloads a blob from the bucket."""
-          bucket_name = "bucket_de"
-          source_blob_name = "raw/raw_data2.csv"
-          destination_file_name = "tmp/raw_data2.csv"
+          API_URL = 'http://projects.knmi.nl/klimatologie/daggegevens/getdata_dag.cgi'
+          API_KEY = "stns=370"
+          # 370:         5.377       51.451      22.60  EINDHOVEN
+          import urllib3
+          import json
 
-          storage_client = storage.Client()
+          with open("raw_data.txt", "w") as dt:
+              import requests
+              stations = [370]
+              params = {
+                  "stns": "370",
+                  "start": "20150101",
+              }
+              print(params)
 
-          bucket = storage_client.bucket(bucket_name)
-          blob = bucket.blob(source_blob_name)
-          blob.download_to_filename(destination_file_name)
-          print('Downloaded data...')
+              url = 'http://projects.knmi.nl/klimatologie/daggegevens/getdata_dag.cgi'
+              myobj = API_KEY
 
-          #import wget
-          #wget -O bestand --post-data="variabele=waarde&variabele=waarde&...." http://projects.knmi.nl/klimatologie/daggegevens/getdata_dag.cgi
-          #df = pd.read_csv('gs://bucket_de/raw/raw_data2,csv', error_bad_lines = False)
-          df =  pd.read_csv("tmp/raw_data2.csv", error_bad_lines=False)
+              r = requests.post(url, data = params)
+              dt.write(r.text)
+
+          with open('raw_data.txt', 'r') as fin:
+              data = fin.read().splitlines(True)
+          with open('edit.txt', 'w') as fout:
+              fout.writelines(data[48:])
+          with open('edit.txt', 'r') as fin:
+              file = fin.readlines()
+
+          import csv
+          import re
+          with open('raw_data.csv', 'w') as dt:
+              csvv = csv.writer(dt)
+              file[0] = file[0].replace('# ','')
+              for row in file:
+                  row = re.sub(r'(?<=[,])(?=[^\s])', r' ', row)
+                  csvv.writerow(row.split())
+
+          df =  pd.read_csv("raw_data.csv", error_bad_lines=False)
 
           def dfreplace(df, *args, **kwargs):
               s = pd.Series(df.values.flatten())
               s = s.str.replace(*args, **kwargs)
               return pd.DataFrame(s.values.reshape(df.shape), df.index, df.columns)
 
+          df = df.drop([0], axis = 0)
           weather_df = dfreplace(df, ',', '')
 
           for i in weather_df.columns:
               weather_df[i] = weather_df[i].astype(str)
               weather_df[i][weather_df[i].apply(lambda i: True if re.search('^\s*$', str(i)) else False)]=np.NaN
-
-          print(weather_df.head())
+          print(weather_df.columns)
+          print(weather_df)
           print('trying to write to GS')
           weather_df.to_parquet(raw_data_path, compression='GZIP')
           print('Done!')
