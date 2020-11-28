@@ -1,0 +1,21 @@
+1. Create a cluster in google cloud
+kubernetes Engine > Cluster > (4nodes should be enough) - (you can create it here or create it directly with the Kubeflow Pipeline later) 
+2.Create Kubeflow Pipelines
+AI Platform > Pipelines > New instance > Configure > 
+	U must:
+	Select an existing cluster or create cluster (as u wish)
+	Allow access to the following cloud APIs 
+
+-Once it is created "OPEN PIPELINES DASHBOARD" - copy the URL
+3.Create Notebooks
+AI Platform > Notebooks > New instance  (Python 3)
+	OPEN JUPYTERLAB
+	in the Terminal or in a new notebook: pip install -r mlops-stock-prediction/requirements.txt (U can drop this notebook later)
+	I cloned Ekhtiar repository: https://github.com/ekhtiar/mlops-stock-prediction.git
+mlops-.. > Notebooks
+	I drop his Notebooks and upload Sietske Notebooks and "raw_data2.csv" there
+	Then open the notebook and ... KFP weather.ipynb > KFP_HOST_NAME: (erase the 'http:xyz...' and paste the kubeflow URL )
+	Run all
+
+5.To observe the pipelines:
+AI Platform > Pipelines > Experiments  > Default  
