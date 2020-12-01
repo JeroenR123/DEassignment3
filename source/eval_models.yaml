@@ -1,0 +1,106 @@
+name: Eval models
+description: Evaluate different models on holdout dataset to see which model performs
+  the best
+inputs:
+- {name: feature_data_path, type: String}
+- {name: regression_weather_model_path}
+- {name: rf_weather_model_path, type: String}
+- {name: validation_days, type: Integer}
+- {name: rf_prediction_path, type: String}
+- {name: reg_prediction_path, type: String}
+outputs:
+- {name: Output, type: String}
+implementation:
+  container:
+    image: python:3.7
+    command:
+    - sh
+    - -c
+    - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+      'scikit-learn' 'fastparquet' 'matplotlib' 'fsspec' 'gcsfs' 'google-cloud-storage'
+      || PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+      'scikit-learn' 'fastparquet' 'matplotlib' 'fsspec' 'gcsfs' 'google-cloud-storage'
+      --user) && "$0" "$@"
+    - python3
+    - -u
+    - -c
+    - "def eval_models(feature_data_path, regression_weather_model_path, rf_weather_model_path,\
+      \ validation_days, rf_prediction_path, reg_prediction_path):\n    '''Evaluate\
+      \ different models on holdout dataset to see which model performs the best'''\n\
+      \    import json\n    import pandas as pd\n    from io import BytesIO\n    import\
+      \ _pickle as cPickle # save ML model\n    from google.cloud import storage #\
+      \ save the model to GCS\n    from sklearn.ensemble import RandomForestRegressor\n\
+      \    from sklearn.linear_model import LinearRegression\n    from sklearn.metrics\
+      \ import mean_absolute_error, mean_squared_error\n    from sklearn.model_selection\
+      \ import train_test_split\n    from urllib.parse import urlparse\n    from collections\
+      \ import namedtuple\n    from matplotlib import pyplot as plt \n\n    # read\
+      \ dataframe\n    weather_df = pd.read_parquet(feature_data_path)\n    # holdout\
+      \ latest datelines used for validation\n    weather_features_df = weather_df.drop(weather_df.tail(validation_days).index,\
+      \ inplace=False, axis=0)#validation set\n\n    weather_validation_df = weather_df.tail(validation_days)\n\
+      \n    x_val, y_val = weather_validation_df.drop('TG_future', axis=1), weather_validation_df['TG_future']\n\
+      \n    def get_mae(model_path):\n        '''this function evaluates a model on\
+      \ the validation dataset given just the model path'''\n        parse = urlparse(url=model_path,\
+      \ allow_fragments=False)\n\n        if parse.path[0] =='/':\n            model_path\
+      \ = parse.path[1:]\n\n        client = storage.Client()\n        bucket = client.get_bucket(parse.netloc)\n\
+      \        blob = bucket.get_blob(model_path)\n        if blob is None:\n    \
+      \        raise AttributeError('No files to download') \n        model_bytestream\
+      \ = BytesIO(blob.download_as_string())\n        model = cPickle.load(model_bytestream)\n\
+      \        predictions = model.predict(x_val)\n\n        return mean_absolute_error(y_val,\
+      \ predictions)\n    def get_prediction(model_path):\n        '''this function\
+      \ evaluates a model on the validation dataset given just the model path'''\n\
+      \        parse = urlparse(url=model_path, allow_fragments=False)\n\n       \
+      \ if parse.path[0] =='/':\n            model_path = parse.path[1:]\n\n     \
+      \   client = storage.Client()\n        bucket = client.get_bucket(parse.netloc)\n\
+      \        blob = bucket.get_blob(model_path)\n        if blob is None:\n    \
+      \        raise AttributeError('No files to download') \n        model_bytestream\
+      \ = BytesIO(blob.download_as_string())\n        model = cPickle.load(model_bytestream)\n\
+      \        predictions = model.predict(x_val)\n        print(y_val.values)\n \
+      \       print(predictions)\n        prediction_df =pd.DataFrame(data = {'prediction'\
+      \ : predictions, 'true value': y_val.values})\n\n        return prediction_df\n\
+      \n    prediction_df_rf = get_prediction(rf_weather_model_path)\n    prediction_df_reg\
+      \ = get_prediction(regression_weather_model_path)\n\n    prediction_df_rf.to_parquet(rf_prediction_path,\
+      \ compression='GZIP')\n    prediction_df_reg.to_parquet(reg_prediction_path,\
+      \ compression='GZIP')\n\n    Models = namedtuple('Model', 'type score path')\n\
+      \    m_list = list()\n\n    regression_mae = get_mae(regression_weather_model_path)\n\
+      \    m_list.append(Models('regression', regression_mae, regression_weather_model_path))\n\
+      \n    rf_mae = get_mae(rf_weather_model_path)\n    m_list.append(Models('rf',\
+      \ rf_mae, rf_weather_model_path))\n\n    max_score = max([model.score for model\
+      \ in m_list])\n    max_score_index = [model.score for model in m_list].index(max_score)\n\
+      \    print('Best Model: ', m_list[max_score_index])\n    path = m_list[max_score_index].path\n\
+      \    print(path)\n    return path\n\ndef _serialize_str(str_value: str) -> str:\n\
+      \    if not isinstance(str_value, str):\n        raise TypeError('Value \"{}\"\
+      \ has type \"{}\" instead of str.'.format(str(str_value), str(type(str_value))))\n\
+      \    return str_value\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Eval\
+      \ models', description='Evaluate different models on holdout dataset to see\
+      \ which model performs the best')\n_parser.add_argument(\"--feature-data-path\"\
+      , dest=\"feature_data_path\", type=str, required=True, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"--regression-weather-model-path\", dest=\"regression_weather_model_path\"\
+      , type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+      --rf-weather-model-path\", dest=\"rf_weather_model_path\", type=str, required=True,\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--validation-days\", dest=\"\
+      validation_days\", type=int, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+      --rf-prediction-path\", dest=\"rf_prediction_path\", type=str, required=True,\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--reg-prediction-path\"\
+      , dest=\"reg_prediction_path\", type=str, required=True, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"----output-paths\", dest=\"_output_paths\", type=str,\
+      \ nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"\
+      _output_paths\", [])\n\n_outputs = eval_models(**_parsed_args)\n\n_outputs =\
+      \ [_outputs]\n\n_output_serializers = [\n    _serialize_str,\n\n]\n\nimport\
+      \ os\nfor idx, output_file in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n\
+      \    except OSError:\n        pass\n    with open(output_file, 'w') as f:\n\
+      \        f.write(_output_serializers[idx](_outputs[idx]))\n"
+    args:
+    - --feature-data-path
+    - {inputValue: feature_data_path}
+    - --regression-weather-model-path
+    - {inputValue: regression_weather_model_path}
+    - --rf-weather-model-path
+    - {inputValue: rf_weather_model_path}
+    - --validation-days
+    - {inputValue: validation_days}
+    - --rf-prediction-path
+    - {inputValue: rf_prediction_path}
+    - --reg-prediction-path
+    - {inputValue: reg_prediction_path}
+    - '----output-paths'
+    - {outputPath: Output}
