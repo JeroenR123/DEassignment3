@@ -34,9 +34,9 @@ implementation:
       \ = weather_features_df['TG,'].div(10)\n    weather_features_df['TG_future']\
       \ = weather_features_df['TG,'].shift(periods = -1)\n\n    #remove irrelevant\
       \ features manually\n    weather_features_df = weather_features_df.drop(columns\
-      \ = ['STN,','EV24,', 'NG,', 'TN,', 'TNH,', 'TX,', 'TXH,', 'T10N,', 'T10NH,',\
-      \ 'UNH'])\n    print(weather_features_df)\n    weather_features_df = weather_features_df.dropna()\n\
-      \    print(len(weather_features_df))\n\n    weather_features_df.to_parquet(feature_data_path,\
+      \ = ['STN,', 'UNH'])\n    print(weather_features_df)\n    weather_features_df\
+      \ = weather_features_df.dropna()\n    print(len(weather_features_df))\n    #'EV24,',\
+      \ 'NG,', 'TN,', 'TNH,', 'TX,', 'TXH,', 'T10N,', 'T10NH,',\n\n    weather_features_df.to_parquet(feature_data_path,\
       \ compression='GZIP')\n    features_numbers = len(weather_features_df.columns)\
       \ - 1\n    print('Writing %s features' % (features_numbers))\n    print('Total\
       \ number of %s rows' % (len(weather_features_df)))\n    print('Done!')\n\n \

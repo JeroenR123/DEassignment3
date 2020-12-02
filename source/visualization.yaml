@@ -1,0 +1,57 @@
+name: Visualization
+implementation:
+  container:
+    image: python:3.7
+    command:
+    - sh
+    - -c
+    - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+      'scikit-learn' 'fastparquet' 'fsspec' 'gcsfs' 'google-cloud-storage' 'dash'
+      'plotly' 'dash_bootstrap_components' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3
+      -m pip install --quiet --no-warn-script-location 'scikit-learn' 'fastparquet'
+      'fsspec' 'gcsfs' 'google-cloud-storage' 'dash' 'plotly' 'dash_bootstrap_components'
+      --user) && "$0" "$@"
+    - python3
+    - -u
+    - -c
+    - "def visualization():\n    import dash\n    import dash_html_components as html\n\
+      \    import dash_core_components as dcc\n    import dash_bootstrap_components\
+      \ as dbc\n    import plotly.express\n    import plotly.figure_factory\n\n  \
+      \  import pandas as pd\n\n    import datetime\n\n    def read_data():\n\n  \
+      \      # Read predictions of Random Forest and Linear Regression models\n  \
+      \      df_rf = pd.read_parquet('gs://bucket_de/model_store/rf/prediction.parquet')\n\
+      \        df_reg = pd.read_parquet('gs://bucket_de/model_store/model_store/prediction.parquet')\n\
+      \n        # Read prediction of today\n        pred_df = pd.read_parquet('gs://bucket_de/model_store/prediction/prediction.parquet')\n\
+      \        pred = str(round(pred_df['prediction'][0], 2))\n\n        return df_rf,\
+      \ df_reg, pred\n\n    # Using the Darkly theme (https://bootswatch.com/darkly/)\n\
+      \    app = dash.Dash(external_stylesheets = [dbc.themes.DARKLY])\n\n    # Retrieve\
+      \ the dataframes and the prediction of today\n    df_rf,df_reg, today_pred =\
+      \ read_data()\n    today_date = datetime.datetime.today()\n\n    # Add column\
+      \ with the right dates\n    df_rf['date'] = [today_date - datetime.timedelta(days\
+      \ = i) for i in range(len(df_rf))]\n    df_reg['date'] = [today_date - datetime.timedelta(days\
+      \ = i) for i in range(len(df_reg))]\n\n    # Plot the predictions of the Random\
+      \ Forest model with the true values\n    fig1 = plotly.express.line(data_frame=df_rf,\n\
+      \                               x='date',\n                               y=['prediction',\
+      \ 'true value'],\n                               title='Random Forest',\n  \
+      \                             template='plotly_dark',\n                    \
+      \           range_y=[0, 40])\n\n    # Plot the predictions of the Linear Regression\
+      \ model with the true values\n    fig2 = plotly.express.line(data_frame=df_reg,\n\
+      \                               x='date',\n                               y=['prediction',\
+      \ 'true value'],\n                               title='Linear Regression',\n\
+      \                               template='plotly_dark',\n                  \
+      \             range_y=[0, 40])\n\n    # Webapp layout\n    app.layout = html.Div([dbc.Row([dbc.Col(html.Div(html.P('Weather\
+      \ radar')),\n                                            style = {'fontSize':40,\
+      \ 'height': '25px'},\n                                            width = {'size':4,\
+      \ 'offset' : 1}),\n                                    dbc.Col(html.Div(\n \
+      \                                       html.P('The predicted temperature of\
+      \ {:} is {:} \xB0C'.format(today_date.date(),\n                            \
+      \                                                                       today_pred)),\n\
+      \                                            style = {'fontSize':20}),\n   \
+      \                                         width = {'size':4, 'offset' : 6})]),\n\
+      \                            dbc.Row([dbc.Col([dcc.Graph(id='graph_LR', figure\
+      \ = fig2, style = {'height': 400})]),\n                                    \
+      \ dbc.Col([dcc.Graph(id='graph_RF', figure=fig1, style={'height': 400})])\n\
+      \                                     ])])\n\n    if __name__ == '__main__':\n\
+      \        app.run_server(debug=True)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Visualization',\
+      \ description='')\n_parsed_args = vars(_parser.parse_args())\n\n_outputs = visualization(**_parsed_args)\n"
+    args: []
